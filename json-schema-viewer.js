@@ -3,6 +3,14 @@ if (!window.location.origin) {
   window.location.origin = window.location.protocol + '//' + window.location.hostname + (window.location.port ? ':' + window.location.port: '');
 }
 
+function getWidthOfText(txt, fontname, fontsize){
+    var e = document.getElementById('Test');
+    e.style.fontSize = fontsize;
+//    e.style.fontFamily = fontname;
+    e.innerText = txt;
+    return e.offsetWidth * 1.4;
+}
+
 if (typeof JSV === 'undefined') {
     /**
      * JSV namespace for JSON Schema Viewer.
@@ -79,6 +87,7 @@ if (typeof JSV === 'undefined') {
             allOf: true,
             anyOf: true,
             oneOf: true,
+            'pattern': true,
             'object{ }': true
         },
 
@@ -444,8 +453,9 @@ if (typeof JSV === 'undefined') {
                 e.height(height);
             });
 
-            $('#info-definition').html(node.description || 'No definition provided.');
+            $('#info-definition').html(node.description.split("\n").join("<br />").replace(" ", "&nbsp;") || 'No definition provided.');
             $('#info-type').html(node.displayType.toString());
+            $('#info-pattern').html(node.pattern || 'No pattern required.');
 
             if(node.translation) {
                 var trans = $('<ul></ul>');
@@ -711,6 +721,10 @@ if (typeof JSV === 'undefined') {
                 all.allOf = s.allOf;
             }
 
+            if (s.patternProperties) {
+                all.patternProperties = s.patternProperties;
+            }
+
             if (s.oneOf) {
                 all.oneOf = s.oneOf;
             }
@@ -732,10 +746,21 @@ if (typeof JSV === 'undefined') {
                 required: s.required,
                 schema: s.id || schema.$ref || parentSchema(parent),
                 parentSchema: parent,
-                deprecated: schema.deprecated || s.deprecated
+                deprecated: schema.deprecated || s.deprecated,
+                pattern: s.pattern
             };
-
+            
             node.require = parent && parent.required ? parent.required.indexOf(node.name) > -1 : false;
+            if (s.minItems) { 
+                node.minItems = s.minItems;
+                if (s.minItems == '1') {
+                    node.require = true;
+                }
+            }
+            if (s.maxItems) { node.maxItems = s.maxItems; }
+            if (s.minProperties) { node.minProperties = s.minProperties; }
+            if (s.maxProperties) { node.maxProperties = s.maxProperties; }
+
 
             if (parent) {
                 if (node.name === 'item') {
@@ -754,12 +779,28 @@ if (typeof JSV === 'undefined') {
             }
 
             if(node.type === 'array') {
-                node.name += '[' + (s.minItems || ' ') + ']';
+                node.name += '[';
+                node.name += s.minItems ? s.minItems : '0';
+                node.name += ', ';
+                node.name += s.maxItems ? s.maxItems : '∞';
+                node.name += ']';
                 node.minItems = s.minItems;
+                node.maxItems = s.maxItems;
             }
 
             if(node.type === 'object' && node.name !== 'item') {
-                node.name += '{ }';
+                node.name += '{';
+                if (s.minProperties) {
+                    node.name += s.minProperties;
+                } else {
+                    node.name += ' ';
+                }
+                if (s.maxProperties) {
+                    node.name += ', ' + s.maxProperties;
+                }
+                node.name += '}';
+                node.minProperties = s.minProperties;
+                node.maxProperties = s.maxProperties;
             }
 
             if(props || items || all) {
@@ -781,7 +822,7 @@ if (typeof JSV === 'undefined') {
                     continue;
                 }
                 var allNode = {
-                    name: key,
+                    name: (key === 'patternProperties') ? 'pattern' : key,
                     children: [],
                     opacity: 0.5,
                     parentSchema: parent,
@@ -796,6 +837,13 @@ if (typeof JSV === 'undefined') {
 
                 for (var i = 0; i < all[key].length; i++) {
                     JSV.compileData(all[key][i], allNode, s.title || all[key][i].type, false, depth + 1);
+                }
+
+                for (var patternKey in all.patternProperties) {
+                    if (!owns.call(all.patternProperties, patternKey)) {
+                        continue;
+                    }
+                    JSV.compileData(all.patternProperties[patternKey],  allNode, patternKey, true, depth + 1);
                 }
             }
 
@@ -1091,7 +1139,7 @@ if (typeof JSV === 'undefined') {
 
             // Set widths between levels based on maxLabelLength.
             nodes.forEach(function(d) {
-                d.y = (d.depth * (JSV.maxLabelLength * 8)); //maxLabelLength * 8px
+                d.y = (d.depth * (JSV.maxLabelLength * 0.75)); //maxLabelLength * 8px
                 // alternatively to keep a fixed scale one can set a fixed depth per level
                 // Normalize for fixed-depth by commenting out below line
                 // d.y = (d.depth * 500); //500px per level.
@@ -1142,7 +1190,7 @@ if (typeof JSV === 'undefined') {
                     return 'start';
                 })
                 .text(function(d) {
-                    return d.name + (d.require ? '*' : '');
+                    return d.name;
                 })
                 .style('fill-opacity', 0)
                 .on('click', JSV.clickTitle)
@@ -1152,6 +1200,31 @@ if (typeof JSV === 'undefined') {
                     d3.event.stopPropagation();
                 });
 
+/* 
+           nodeEnter.append('text')
+                .filter(function(d) {
+                    return d.type != null && d.type != 'array' && d.type != 'object';
+                })
+                .attr('x', function(d) {
+                    return 20;
+    //                return d.children || d._children ? -10 : 10;
+                })
+                .attr('dy', '1.35em')
+                .attr('class', function(d) {
+                    return (d.children || d._children) ? 'node-text node-branch' : 'node-text';
+                })
+                .classed('abstract', function(d) {
+                    return d.opacity < 1;
+                })
+                .attr('text-anchor', function(d) {
+                    //return d.children || d._children ? 'end' : 'start';
+                    return 'start';
+                })
+                .text(function(d) {
+                    return d.type;
+                })
+                .style('fill-opacity', 1);
+*/
 
             // Change the circle fill depending on whether it has children and is collapsed
             node.select('.node circle')
@@ -1195,7 +1268,13 @@ if (typeof JSV === 'undefined') {
 
             // Enter any new links at the parent's previous position.
             link.enter().insert('path', 'g')
-                .attr('class', 'link')
+                .attr('class', function(d) {
+                    if (d.target.require) {
+                        return 'link required-link';
+                    } else {
+                        return 'link optional-link';
+                    }
+                })
                 .attr('d', function(d) {
                     var o = {
                         x: source.x0,
@@ -1229,6 +1308,7 @@ if (typeof JSV === 'undefined') {
                     });
                 })
                 .remove();
+            
 
             // Stash the old positions for transition.
             nodes.forEach(function(d) {
@@ -1272,14 +1352,15 @@ if (typeof JSV === 'undefined') {
                 // Call JSV.visit function to establish maxLabelLength
                 JSV.visit(JSV.treeData, function(d) {
                     totalNodes++;
-                    JSV.maxLabelLength = Math.max(d.name.length, JSV.maxLabelLength);
+                    var thisWidth = getWidthOfText(d.name, 'DejaVu Sans', 14);
+                    JSV.maxLabelLength = Math.max(thisWidth, JSV.maxLabelLength);
 
                 }, function(d) {
                     return d.children && d.children.length > 0 ? d.children : null;
                 });
 
                 // Sort the tree initially in case the JSON isn't in a sorted order.
-                //JSV.sortTree();
+                JSV.sortTree(JSV.tree);
 
                 JSV.svgGroup = JSV.baseSvg.append('g')
                     .attr('id', 'node-group');
@@ -1302,31 +1383,26 @@ if (typeof JSV === 'undefined') {
                     itemCls: 'focus',
                     y: 60
                 },{
-                    text: 'Required*',
+                    text: 'Object{minProp,maxProp}',
                     y: 80
                 },{
-                    text: 'Object{ }',
-                    iconCls: 'collapsed',
+                    text: 'Array[min #, max #]',
                     y: 100
-                },{
-                    text: 'Array[minimum #]',
-                    iconCls: 'collapsed',
-                    y: 120
                 },{
                     text: 'Abstract Property',
                     itemCls: 'abstract',
-                    y: 140,
+                    y: 120,
                     opacity: 0.5
                 },{
                     text: 'Deprecated',
                     itemCls: 'deprecated',
-                    y: 160
+                    y: 140
                 }];
 
 
                 var legendSvg = d3.select('#legend-items').append('svg')
-                    .attr('width', 170)
-                    .attr('height', 180);
+                    .attr('width', 240)
+                    .attr('height', 160);
 
                 // Update the nodes…
                 var legendItem = legendSvg.selectAll('g.item-group')

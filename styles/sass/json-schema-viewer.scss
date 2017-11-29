@@ -143,6 +143,14 @@ p.ui-content.error-message {
 
 .link {
   fill: none;
+}
+
+.required-link {
+  stroke: red;
+  stroke-width: 4.5px;
+}
+
+.optional-link {
   stroke: #ccc;
   stroke-width: 1.5px;
 }

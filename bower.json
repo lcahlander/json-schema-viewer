@@ -15,7 +15,8 @@
   "license": "Unlicense",
   "dependencies": {
     "d3": "~3",
-    "tv4": "~1.2.7"
+    "tv4": "~1.2.7",
+    "d3-flextree": "^1.0.3"
   },
   "devDependencies": {
     "uri.js": "~1.14.1",
