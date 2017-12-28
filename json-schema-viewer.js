@@ -453,9 +453,33 @@ if (typeof JSV === 'undefined') {
                 e.height(height);
             });
 
-            $('#info-definition').html(node.description.split("\n").join("<br />").replace(" ", "&nbsp;") || 'No definition provided.');
+            if (node.description) {
+                $('#info-definition').html(node.description.split("\n").join("<br />").replace(" ", "&nbsp;"));
+            } else {
+                $('#info-definition').html('No definition provided.');
+            }
             $('#info-type').html(node.displayType.toString());
             $('#info-pattern').html(node.pattern || 'No pattern required.');
+
+            if (node.enum) {
+                var enumText = '';
+                if (node.xsdEnum) {
+                    enumText = '<table class="enumTable"><tr><th>Value</th><th>Description</th></tr>';
+                    for (i = 0; i < node.xsdEnum.length; i++) {
+                        enumText += '<tr><td>' + node.xsdEnum[i].value + '</td><td>' + node.xsdEnum[i].description + '</td></tr>';
+                    }
+                    enumText += '</table>';
+                } else {
+                    enumText = '<ul class="enumList">';
+                    for (i = 0; i < node.enum.length; i++) {
+                        enumText += '<li>' + node.enum[i] + '</li>';
+                    }
+                    enumText += '</ul>';
+                }
+                $('#info-enumeration').html(enumText);
+            } else {
+                $('#info-enumeration').html('No enumeration provided.');
+            }
 
             if(node.translation) {
                 var trans = $('<ul></ul>');
@@ -750,6 +774,20 @@ if (typeof JSV === 'undefined') {
                 pattern: s.pattern
             };
             
+            if (s.minItems || s.maxItems) {
+                node.displayType += ' [' + (s.minItems || '0') + ',' + (s.maxItems || '∞') + ']';
+            }
+            
+            if (s.minLength || s.maxLength) {
+                node.displayType += ' [' + (s.minLength || '0') + ',' + (s.maxLength || '∞') + ']';
+            }
+            
+            if (s.minProperties || s.maxProperties) {
+                node.displayType += ' {' + (s.minProperties || '0') + ',' + (s.maxProperties || '∞') + '}';
+            }
+            
+
+            
             node.require = parent && parent.required ? parent.required.indexOf(node.name) > -1 : false;
             if (s.minItems) { 
                 node.minItems = s.minItems;
@@ -760,6 +798,10 @@ if (typeof JSV === 'undefined') {
             if (s.maxItems) { node.maxItems = s.maxItems; }
             if (s.minProperties) { node.minProperties = s.minProperties; }
             if (s.maxProperties) { node.maxProperties = s.maxProperties; }
+            if (s.minLength) { node.minLength = s.minLength; }
+            if (s.maxLength) { node.maxLength = s.maxLength; }
+            if (s.enum) { node.enum = s.enum; }
+            if (s.xsdEnum) { node.xsdEnum = s.xsdEnum; }
 
 
             if (parent) {
@@ -803,6 +845,8 @@ if (typeof JSV === 'undefined') {
                 node.maxProperties = s.maxProperties;
             }
 
+            node.width = node.name ? getWidthOfText(node.name, 'DejaVu Sans', 14) : 30;
+            
             if(props || items || all) {
                 node.children = [];
             }
@@ -1139,10 +1183,10 @@ if (typeof JSV === 'undefined') {
 
             // Set widths between levels based on maxLabelLength.
             nodes.forEach(function(d) {
-                d.y = (d.depth * (JSV.maxLabelLength * 0.75)); //maxLabelLength * 8px
+//                d.y = (d.depth * (JSV.maxLabelLength * 0.75)); //maxLabelLength * 8px
                 // alternatively to keep a fixed scale one can set a fixed depth per level
                 // Normalize for fixed-depth by commenting out below line
-                // d.y = (d.depth * 500); //500px per level.
+                d.y = (d.depth * 500); //500px per level.
             });
             // Update the nodes…
             var node = JSV.svgGroup.selectAll('g.node')
@@ -1164,8 +1208,19 @@ if (typeof JSV === 'undefined') {
                 .attr('transform', function(d) {
                     return 'translate(' + source.y0 + ',' + source.x0 + ')';
                 });
+                
+/*            nodeEnter.append('rect')
+            .style('fill', 'none')
+            .style('stroke', 'rgb(128,128,128)')
+            .attr('x', '-8')
+            .attr('y', '-8')
+            .attr('width', function(d) {
+                return d.width + 8;
+            }).attr('height', function(d) {
+                return 20;
+            });
 
-            nodeEnter.append('circle')
+*/            nodeEnter.append('circle')
                 //.attr('class', 'nodeCircle')
                 .attr('r', 0)
                 .classed('collapsed', function(d) {
@@ -1199,32 +1254,6 @@ if (typeof JSV === 'undefined') {
                     JSV.clickTitle(d);
                     d3.event.stopPropagation();
                 });
-
-/* 
-           nodeEnter.append('text')
-                .filter(function(d) {
-                    return d.type != null && d.type != 'array' && d.type != 'object';
-                })
-                .attr('x', function(d) {
-                    return 20;
-    //                return d.children || d._children ? -10 : 10;
-                })
-                .attr('dy', '1.35em')
-                .attr('class', function(d) {
-                    return (d.children || d._children) ? 'node-text node-branch' : 'node-text';
-                })
-                .classed('abstract', function(d) {
-                    return d.opacity < 1;
-                })
-                .attr('text-anchor', function(d) {
-                    //return d.children || d._children ? 'end' : 'start';
-                    return 'start';
-                })
-                .text(function(d) {
-                    return d.type;
-                })
-                .style('fill-opacity', 1);
-*/
 
             // Change the circle fill depending on whether it has children and is collapsed
             node.select('.node circle')
@@ -1346,14 +1375,15 @@ if (typeof JSV === 'undefined') {
                     .attr('height', viewerHeight)
                     .call(JSV.zoomListener);
 
-                JSV.tree = d3.layout.tree()
-                    .size([viewerHeight, viewerWidth]);
+                JSV.tree = d3.layout.flextree().setNodeSizes(true).nodeSize(function(d) {
+          return [d.width, 25];
+        });
 
                 // Call JSV.visit function to establish maxLabelLength
                 JSV.visit(JSV.treeData, function(d) {
                     totalNodes++;
-                    var thisWidth = getWidthOfText(d.name, 'DejaVu Sans', 14);
-                    JSV.maxLabelLength = Math.max(thisWidth, JSV.maxLabelLength);
+//                    var thisWidth = getWidthOfText(d.name, 'DejaVu Sans', 14);
+//                    JSV.maxLabelLength = Math.max(thisWidth, JSV.maxLabelLength);
 
                 }, function(d) {
                     return d.children && d.children.length > 0 ? d.children : null;
@@ -1388,21 +1418,12 @@ if (typeof JSV === 'undefined') {
                 },{
                     text: 'Array[min #, max #]',
                     y: 100
-                },{
-                    text: 'Abstract Property',
-                    itemCls: 'abstract',
-                    y: 120,
-                    opacity: 0.5
-                },{
-                    text: 'Deprecated',
-                    itemCls: 'deprecated',
-                    y: 140
                 }];
 
 
                 var legendSvg = d3.select('#legend-items').append('svg')
                     .attr('width', 240)
-                    .attr('height', 160);
+                    .attr('height', 120);
 
                 // Update the nodes…
                 var legendItem = legendSvg.selectAll('g.item-group')

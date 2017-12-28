@@ -64,3 +64,4 @@ prod
 styles/*.*
 jsdoc
 .grunt
+/package-lock.json
