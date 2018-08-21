@@ -445,6 +445,7 @@ if (typeof JSV === 'undefined') {
             var schema = $('#info-tab-schema');
             var def = $('#info-tab-def');
             var ex = $('#info-tab-example');
+            var i = 0;
 
             var height = ($('#info-panel').innerHeight() - $('#info-panel .ui-panel-inner').outerHeight() + $('#info-panel #info-tabs').height()) -
                 $('#info-panel #info-tabs-navbar').height() - (schema.outerHeight(true) - schema.height());
@@ -454,7 +455,7 @@ if (typeof JSV === 'undefined') {
             });
 
             if (node.description) {
-                $('#info-definition').html(node.description.split("\n").join("<br />").replace(" ", "&nbsp;"));
+                $('#info-definition').html(node.description.split('\n').join('<br />').replace(' ', '&nbsp;'));
             } else {
                 $('#info-definition').html('No definition provided.');
             }
